@@ -42,6 +42,12 @@ while (-not $out) {
 }
 Write-Host "Saving videos to: $out" -ForegroundColor DarkGray
 $batch   = 3
+$bcfg    = Join-Path $dir "batch_size.txt"
+if (Test-Path $bcfg) {
+    $v = "$(Get-Content $bcfg | Select-Object -First 1)".Trim()
+    if ($v -match '^[1-4]$') { $batch = [int]$v }
+}
+Write-Host "Downloading $batch at a time" -ForegroundColor DarkGray
 $maxTry  = 3
 
 foreach ($f in @($done, $failed)) {

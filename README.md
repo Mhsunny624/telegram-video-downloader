@@ -4,7 +4,7 @@ A simple downloader that saves videos from Telegram channels, for **Windows** an
 **Android (Termux)**. It is a friendly wrapper around [tdl](https://github.com/iyear/tdl).
 
 - Add a **whole channel**, or paste **one or many video links**
-- Downloads 3 videos at a time
+- Downloads 1 to 4 videos at a time (your choice, default 3)
 - Never downloads the same post twice
 - Safe to close at any time; run it again to carry on
 - Links that keep failing are set aside so the rest keep going
@@ -48,6 +48,7 @@ You get a menu:
   1      Add a whole channel
   2      Add video links (one or many)
   3      Change download folder (D:\Videos\Telegram)
+  4      Downloads at a time (3)
   Enter  Start downloading (12 waiting)
   Q      Quit
 ```
@@ -82,6 +83,9 @@ You can also paste links into `links.txt` yourself, one per line.
   hand a folder back to Termux, so the browser is built into the script.) You can also
   type a path directly, e.g. `/storage/emulated/0/Movies/Telegram`.
 
+**4 - Downloads at a time.** Choose how many videos download together, from 1 to 4
+(default 3). More is faster, but too many at once can make Telegram slow you down.
+
 ## Files it creates
 
 | File | What it's for |
@@ -90,6 +94,7 @@ You can also paste links into `links.txt` yourself, one per line.
 | `done.txt` | Posts already downloaded (these are skipped in future) |
 | `failed.txt` | Posts that failed 3 times. Move them back to `links.txt` to retry |
 | `download_folder.txt` | Your chosen save folder. Change it with option 3 |
+| `batch_size.txt` | How many download at a time. Change it with option 4 |
 
 These files are personal and are excluded from git.
 

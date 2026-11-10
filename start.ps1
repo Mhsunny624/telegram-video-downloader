@@ -141,6 +141,33 @@ function Change-Folder {
     }
 }
 
+$bcfg = Join-Path $dir "batch_size.txt"
+
+function Get-BatchSize {
+    if (Test-Path $bcfg) {
+        $v = "$(Get-Content $bcfg | Select-Object -First 1)".Trim()
+        if ($v -match '^[1-4]$') { return [int]$v }
+    }
+    return 3
+}
+
+function Set-BatchSize {
+    $cur = Get-BatchSize
+    Write-Host ""
+    Write-Host " How many videos should download at the same time? (1 to 4, currently $cur)"
+    Write-Host " More is faster, but too many can cause Telegram to slow you down."
+    while ($true) {
+        $n = (Read-Host " Number (Enter to keep $cur)").Trim()
+        if (-not $n) { Write-Host " Kept: $cur at a time"; return }
+        if ($n -match '^[1-4]$') {
+            Set-Content $bcfg $n
+            Write-Host " Now downloading $n at a time." -ForegroundColor Green
+            return
+        }
+        Write-Host " Please type a number from 1 to 4." -ForegroundColor Yellow
+    }
+}
+
 function Get-Waiting {
     $skip = @{}
     foreach ($f in @($done, $failed)) { Get-Content $f | ForEach-Object { $t = $_.Trim(); if ($t) { $skip[$t] = $true } } }
@@ -150,7 +177,7 @@ function Get-Waiting {
 Write-Host "============================================================"
 Write-Host "                 TELEGRAM VIDEO DOWNLOADER"
 Write-Host "============================================================"
-Write-Host " Downloads 3 at a time. Finished links move to done.txt and"
+Write-Host " Downloads up to 4 at a time. Finished links move to done.txt and"
 Write-Host " are never downloaded again. Links that fail 3 times go to"
 Write-Host " failed.txt. Safe to close any time - run again to continue."
 Write-Host " Use option 3 to choose where videos are saved."
@@ -161,6 +188,7 @@ while ($true) {
     Write-Host "  2     Add video links (one or many)"
     $saved = Get-SavedFolder
     Write-Host ("  3     Change download folder ({0})" -f $(if ($saved) { $saved } else { "not set yet" }))
+    Write-Host ("  4     Downloads at a time ({0})" -f (Get-BatchSize))
     Write-Host ("  Enter Start downloading ({0} waiting)" -f (Get-Waiting))
     Write-Host "  Q     Quit"
     $choice = (Read-Host " Choose").Trim()
@@ -168,8 +196,9 @@ while ($true) {
         "1"     { Add-Channel }
         "2"     { Add-Videos }
         "3"     { Change-Folder }
+        "4"     { Set-BatchSize }
         ""      { & (Join-Path $dir "download.ps1"); return }
         "q"     { return }
-        default { Write-Host " Please type 1, 2, 3, Q or just press Enter." -ForegroundColor Yellow }
+        default { Write-Host " Please type 1-4, Q or just press Enter." -ForegroundColor Yellow }
     }
 }

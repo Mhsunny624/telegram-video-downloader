@@ -198,6 +198,30 @@ add_videos() {
   echo "${G} Found $found links, added $added new ($((found - added)) already listed or downloaded).${N}"
 }
 
+BCFG="$DIR/batch_size.txt"
+
+get_batch() {
+  local v=""
+  [[ -f "$BCFG" ]] && v="$(head -n1 "$BCFG" | tr -d '\r[:space:]')"
+  [[ "$v" =~ ^[1-4]$ ]] && echo "$v" || echo 3
+}
+
+set_batch() {
+  local cur n; cur="$(get_batch)"
+  echo
+  echo " How many videos should download at the same time? (1 to 4, currently $cur)"
+  echo " More is faster, but too many can cause Telegram to slow you down."
+  while true; do
+    read -rp " Number (Enter to keep $cur): " n
+    n="${n//[[:space:]]/}"
+    if [[ -z "$n" ]]; then echo " Kept: $cur at a time"; return; fi
+    if [[ "$n" =~ ^[1-4]$ ]]; then
+      echo "$n" > "$BCFG"; echo "${G} Now downloading $n at a time.${N}"; return
+    fi
+    echo "${Y} Please type a number from 1 to 4.${N}"
+  done
+}
+
 waiting() {
   tr -d '\r' < "$LINKS" | sed '/^[[:space:]]*$/d' \
     | grep -vxF -f <(awk 1 "$DONE" "$FAILED" | tr -d '\r' | sed '/^[[:space:]]*$/d') | grep -c .
@@ -207,6 +231,8 @@ waiting() {
 download_all() {
   choose_folder
   echo "Saving videos to: $OUT"
+  BATCH="$(get_batch)"
+  echo "Downloading $BATCH at a time"
   have termux-wake-lock && termux-wake-lock
   local tries=0
   while true; do
@@ -245,7 +271,7 @@ setup_tdl
 echo "============================================================"
 echo "                 TELEGRAM VIDEO DOWNLOADER"
 echo "============================================================"
-echo " Downloads 3 at a time. Finished links move to done.txt and"
+echo " Downloads up to 4 at a time. Finished links move to done.txt and"
 echo " are never downloaded again. Links that fail 3 times go to"
 echo " failed.txt. Safe to close any time - run again to continue."
 echo " Use option 3 to choose where videos are saved."
@@ -255,6 +281,7 @@ while true; do
   echo "  1      Add a whole channel"
   echo "  2      Add video links (one or many)"
   echo "  3      Change download folder ($( [[ -s "$CFG" ]] && head -n1 "$CFG" | tr -d '\r' || echo 'not set yet'))"
+  echo "  4      Downloads at a time ($(get_batch))"
   echo "  Enter  Start downloading ($(waiting) waiting)"
   echo "  q      Quit"
   read -rp " Choose: " choice
@@ -262,8 +289,9 @@ while true; do
     1)  add_channel ;;
     2)  add_videos ;;
     3)  choose_folder change ;;
+    4)  set_batch ;;
     "") download_all; break ;;
     q)  exit 0 ;;
-    *)  echo "${Y} Please type 1, 2, q or just press Enter.${N}" ;;
+    *)  echo "${Y} Please type 1-4, q or just press Enter.${N}" ;;
   esac
 done
