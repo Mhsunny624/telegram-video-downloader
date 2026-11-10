@@ -58,20 +58,65 @@ setup_tdl() {
   "$TDL" login -T code
 }
 
+# Lets you walk through your phone's folders by number and pick one (sets PICKED)
+browse_folder() {
+  local cur="$1" choice nm i
+  local dirs=()
+  while true; do
+    mapfile -t dirs < <(find "$cur" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | sort -f)
+    echo
+    echo "${C} Folder: $cur${N}"
+    echo "   0   >> Save videos HERE <<"
+    echo "   u   Go up one level"
+    for i in "${!dirs[@]}"; do printf '   %-3d %s\n' $((i + 1)) "$(basename "${dirs[i]}")"; done
+    ((${#dirs[@]} == 0)) && echo "       (no folders here)"
+    echo "   n   Make a new folder here"
+    echo "   c   Cancel"
+    read -rp " Choose: " choice
+    case "${choice,,}" in
+      0) PICKED="$cur"; return 0 ;;
+      u) [[ "$cur" != "/" ]] && cur="$(dirname "$cur")" ;;
+      n) read -rp " New folder name: " nm
+         if [[ -n "$nm" ]] && mkdir -p "$cur/$nm" 2>/dev/null; then cur="$cur/$nm"
+         else echo "${R} Couldn't create that folder.${N}"; fi ;;
+      c) return 1 ;;
+      *) if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#dirs[@]})); then
+           cur="${dirs[choice - 1]}"
+         else
+           echo "${Y} Type a number from the list, or u / n / c.${N}"
+         fi ;;
+    esac
+  done
+}
+
+# Sets OUT to the download folder. Pass "change" to pick a new one even if one is saved.
 choose_folder() {
+  local mode="${1:-}" old=""
   OUT=""
-  [[ -f "$CFG" ]] && OUT="$(head -n1 "$CFG" | tr -d '\r')"
+  [[ -f "$CFG" ]] && old="$(head -n1 "$CFG" | tr -d '\r')"
+  [[ "$mode" != change ]] && OUT="$old"
   local def="$DIR/Downloads"
   [[ -d /storage/emulated/0 ]] && def="/storage/emulated/0/Download/Telegram"
+  local root="/storage/emulated/0"; [[ -d "$root" ]] || root="$HOME"
   while [[ -z "$OUT" ]]; do
     echo
-    read -rp "Where should videos be saved? (Enter for $def): " ans
+    echo " Where should videos be saved?"
+    [[ -n "$old" ]] && echo "   Current: $old"
+    echo "   b      Browse your phone's folders"
+    echo "   Enter  Use $def"
+    [[ -n "$old" ]] && echo "   c      Cancel (keep current folder)"
+    echo "   ...or type a full folder path"
+    read -rp " Folder: " ans
+    case "${ans,,}" in
+      b) if browse_folder "$root"; then ans="$PICKED"; else continue; fi ;;
+      c) if [[ -n "$old" ]]; then OUT="$old"; echo " Kept: $OUT"; return; fi; continue ;;
+    esac
     ans="${ans:-$def}"; ans="${ans/#\~/$HOME}"
     if mkdir -p "$ans" 2>/dev/null && [[ -w "$ans" ]]; then
       OUT="$(cd "$ans" && pwd)"
       echo "$OUT" > "$CFG"
       echo "${G}Saved. Videos will go to: $OUT${N}"
-      echo "(To change this later, delete download_folder.txt)"
+      echo "(Change it any time with option 3 in the menu)"
     else
       echo "${R}Can't use that folder.${N}"
       [[ "$ans" == /storage/* ]] && echo "Run 'termux-setup-storage' and allow access, then try again."
@@ -203,18 +248,20 @@ echo "============================================================"
 echo " Downloads 3 at a time. Finished links move to done.txt and"
 echo " are never downloaded again. Links that fail 3 times go to"
 echo " failed.txt. Safe to close any time - run again to continue."
-echo " Save folder is in download_folder.txt (delete it to change)."
+echo " Use option 3 to choose where videos are saved."
 
 while true; do
   echo
   echo "  1      Add a whole channel"
   echo "  2      Add video links (one or many)"
+  echo "  3      Change download folder ($( [[ -s "$CFG" ]] && head -n1 "$CFG" | tr -d '\r' || echo 'not set yet'))"
   echo "  Enter  Start downloading ($(waiting) waiting)"
   echo "  q      Quit"
   read -rp " Choose: " choice
   case "${choice,,}" in
     1)  add_channel ;;
     2)  add_videos ;;
+    3)  choose_folder change ;;
     "") download_all; break ;;
     q)  exit 0 ;;
     *)  echo "${Y} Please type 1, 2, q or just press Enter.${N}" ;;

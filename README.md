@@ -37,8 +37,8 @@ It also works on any Linux PC the same way.
 - It asks you to sign in to Telegram: enter your phone number with country code
   (e.g. `+441234567890`), then the code Telegram sends to your Telegram app.
 - Before the first download it asks where to save videos. Press Enter for the default
-  (`Downloads` next to the scripts on Windows, `Download/Telegram` on Android) or type
-  any folder.
+  (`Downloads` next to the scripts on Windows, `Download/Telegram` on Android), press
+  **B** to browse for a folder, or type any folder path.
 
 ## Using it
 
@@ -47,6 +47,7 @@ You get a menu:
 ```
   1      Add a whole channel
   2      Add video links (one or many)
+  3      Change download folder (D:\Videos\Telegram)
   Enter  Start downloading (12 waiting)
   Q      Quit
 ```
@@ -74,6 +75,13 @@ https://t.me/c/1234567890/31 https://t.me/channelname/7
 
 You can also paste links into `links.txt` yourself, one per line.
 
+**3 - Change download folder.**
+- **Windows:** opens the normal Windows folder picker.
+- **Android:** opens a simple folder browser - type a folder's number to open it, `0` to
+  save there, `u` to go up, `n` to make a new folder. (Android's own file manager can't
+  hand a folder back to Termux, so the browser is built into the script.) You can also
+  type a path directly, e.g. `/storage/emulated/0/Movies/Telegram`.
+
 ## Files it creates
 
 | File | What it's for |
@@ -81,7 +89,7 @@ You can also paste links into `links.txt` yourself, one per line.
 | `links.txt` | Posts waiting to be downloaded |
 | `done.txt` | Posts already downloaded (these are skipped in future) |
 | `failed.txt` | Posts that failed 3 times. Move them back to `links.txt` to retry |
-| `download_folder.txt` | Your chosen save folder. Delete it to pick a new one |
+| `download_folder.txt` | Your chosen save folder. Change it with option 3 |
 
 These files are personal and are excluded from git.
 

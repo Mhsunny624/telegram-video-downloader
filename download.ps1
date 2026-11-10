@@ -11,15 +11,31 @@ if ($out) { $out = $out.Trim().Trim('"') }
 while (-not $out) {
     $default = Join-Path $dir "Downloads"
     Write-Host ""
-    $ans = Read-Host "Where should videos be saved? (press Enter for $default)"
+    Write-Host "Where should videos be saved?"
+    Write-Host "  B      Browse for a folder"
+    Write-Host "  Enter  Use $default"
+    $ans = Read-Host "  ...or type a full folder path"
     $ans = $ans.Trim().Trim('"')
+    if ($ans -eq "b" -or $ans -eq "B") {
+        $ans = $null
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+            $dlg.Description = "Choose where to save Telegram videos"
+            $dlg.ShowNewFolderButton = $true
+            $owner = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true }
+            if ($dlg.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { $ans = $dlg.SelectedPath }
+            $owner.Dispose()
+        } catch { Write-Host "Folder picker unavailable - please type the path instead." -ForegroundColor Yellow }
+        if (-not $ans) { continue }
+    }
     if (-not $ans) { $ans = $default }
     try {
         if (-not (Test-Path $ans)) { New-Item $ans -ItemType Directory -ErrorAction Stop | Out-Null }
         $out = (Resolve-Path $ans).Path
         Set-Content $cfg $out
         Write-Host "Saved. Videos will go to: $out" -ForegroundColor Green
-        Write-Host "(To change this later, delete download_folder.txt)"
+        Write-Host "(Change it any time with option 3 in the menu)"
     } catch {
         Write-Host "Can't use that folder: $($_.Exception.Message)" -ForegroundColor Red
     }
