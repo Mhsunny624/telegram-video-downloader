@@ -17,17 +17,83 @@ A simple downloader that saves videos from Telegram channels, for **Windows** an
 
 ## Android (Termux)
 
-1. Install [Termux](https://github.com/termux/termux-app/releases) (not the Play Store
-   version), open it and run:
-   ```bash
-   termux-setup-storage
-   pkg install -y git
-   git clone https://github.com/Mhsunny624/telegram-video-downloader ~/telegram-video-downloader
-   ```
-2. Start it with:
-   ```bash
-   bash ~/telegram-video-downloader/start-download.sh
-   ```
+### 1. Install Termux
+
+Download Termux from [GitHub](https://github.com/termux/termux-app/releases) or
+[F-Droid](https://f-droid.org/packages/com.termux/). **Don't use the Play Store version** -
+it's outdated and no longer works properly.
+
+- On the GitHub releases page, open **Assets** and pick the file ending in
+  **`arm64-v8a.apk`** (right for almost all modern phones). If unsure, use
+  **`universal.apk`**.
+- If Android blocks the install, tap **Settings > Allow from this source**, then go back
+  and tap **Install**.
+- If you see an **"Android App Compatibility"** warning about a debuggable app or
+  16 KB pages, tap **Don't Show Again**. It's harmless - Termux works fine.
+
+### 2. Set up Termux (first time only)
+
+Open Termux and run these one at a time:
+
+```bash
+pkg update && pkg upgrade -y
+```
+
+> If it stops and asks about a configuration file (`openssl.cnf`, `sources.list`,
+> `bash.bashrc` ...), type **`y`** and press Enter each time.
+
+```bash
+termux-setup-storage
+```
+
+> Tap **Allow** on the popup. This lets Termux save videos to your phone storage.
+
+```bash
+pkg install -y git
+git clone https://github.com/Mhsunny624/telegram-video-downloader ~/telegram-video-downloader
+```
+
+### 3. Run it
+
+```bash
+bash ~/telegram-video-downloader/start-download.sh
+```
+
+On the first run it installs everything else it needs (`jq`, `curl`, tdl) and asks you
+to sign in to Telegram.
+
+**Tip - make a short command.** Run this once:
+
+```bash
+echo "alias tgdl='bash ~/telegram-video-downloader/start-download.sh'" >> ~/.bashrc && source ~/.bashrc
+```
+
+From then on, just type **`tgdl`** to start the downloader.
+
+### Updating
+
+```bash
+cd ~/telegram-video-downloader && git pull
+```
+
+Your links, settings and download history are kept.
+
+### Termux tips
+
+- **Keep downloads running:** the script holds a wake lock while downloading so Android
+  doesn't pause it. Leave Termux open (it can be in the background) and avoid swiping it
+  away from recent apps.
+- **Files location:** videos go to `Download/Telegram` on your phone by default
+  (change with option 3). Your links and history (`links.txt`, `done.txt`, ...) live in
+  `~/telegram-video-downloader`.
+- **"Can't use that folder" / permission errors:** run `termux-setup-storage` again and
+  allow access.
+- **SD card:** Android only lets Termux write inside its own folder on the card, e.g.
+  `/storage/XXXX-XXXX/Android/media/com.termux/Telegram`.
+- **Download stopped with a connection error:** turn off any VPN, stay on Wi-Fi, and run
+  the downloader again - it carries on where it left off.
+- **Sign in again:** `tdl login -T code`
+- **Paste in Termux:** long-press the screen and tap **Paste**.
 
 It also works on any Linux PC the same way.
 
