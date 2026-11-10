@@ -48,7 +48,7 @@ You get a menu:
   1      Add a whole channel
   2      Add video links (one or many)
   3      Change download folder (D:\Videos\Telegram)
-  4      Downloads at a time (3)
+  4      Downloads at a time (now 3 | default 3, max 4)
   Enter  Start downloading (12 waiting)
   Q      Quit
 ```

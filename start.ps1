@@ -188,7 +188,7 @@ while ($true) {
     Write-Host "  2     Add video links (one or many)"
     $saved = Get-SavedFolder
     Write-Host ("  3     Change download folder ({0})" -f $(if ($saved) { $saved } else { "not set yet" }))
-    Write-Host ("  4     Downloads at a time ({0})" -f (Get-BatchSize))
+    Write-Host ("  4     Downloads at a time (now {0} | default 3, max 4)" -f (Get-BatchSize))
     Write-Host ("  Enter Start downloading ({0} waiting)" -f (Get-Waiting))
     Write-Host "  Q     Quit"
     $choice = (Read-Host " Choose").Trim()

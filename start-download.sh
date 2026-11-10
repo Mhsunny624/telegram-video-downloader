@@ -281,7 +281,7 @@ while true; do
   echo "  1      Add a whole channel"
   echo "  2      Add video links (one or many)"
   echo "  3      Change download folder ($( [[ -s "$CFG" ]] && head -n1 "$CFG" | tr -d '\r' || echo 'not set yet'))"
-  echo "  4      Downloads at a time ($(get_batch))"
+  echo "  4      Downloads at a time (now $(get_batch) | default 3, max 4)"
   echo "  Enter  Start downloading ($(waiting) waiting)"
   echo "  q      Quit"
   read -rp " Choose: " choice
