@@ -1,0 +1,18 @@
+# tdl binary (downloaded automatically by setup-tdl.ps1)
+tdl.exe
+tdl-docs/
+
+# Personal data - never commit
+links.txt
+done.txt
+failed.txt
+download_folder.txt
+*.json
+todo.tmp
+instruction.txt
+
+# Downloaded videos
+Downloads/
+*.mp4
+*.mkv
+*.part
