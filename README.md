@@ -81,6 +81,9 @@ Your links, settings and download history are kept.
 
 ### Termux tips
 
+- **Stop downloading:** press **CTRL** + **C**. It stops straight away; unfinished
+  videos stay on the list and carry on next time. You can also tap **Exit** on the
+  Termux notification.
 - **Keep downloads running:** the script holds a wake lock while downloading so Android
   doesn't pause it. Leave Termux open (it can be in the background) and avoid swiping it
   away from recent apps.

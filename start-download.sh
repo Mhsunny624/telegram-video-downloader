@@ -314,14 +314,47 @@ remove_from_links() {
   cat "$tmp" > "$LINKS"; rm -f "$tmp"
 }
 
+# tdl keeps an unfinished video as "<chat>_<post>_<name>.tmp" until it is complete
+tmp_exists() {
+  local chat mid
+  if [[ $1 =~ ^https://t\.me/c/([0-9]+)/([0-9]+)$ ]]; then chat="${BASH_REMATCH[1]}"; mid="${BASH_REMATCH[2]}"
+  elif [[ $1 =~ /([0-9]+)$ ]]; then chat='*'; mid="${BASH_REMATCH[1]}"
+  else return 1; fi
+  compgen -G "$OUT/${chat}_${mid}_*.tmp" >/dev/null
+}
+
+# Links marked done whose video is still unfinished (.tmp) go back on the list
+repair_done() {
+  local l bad=() keys=() tmp
+  while IFS= read -r l; do
+    l="${l%$'\r'}"; [[ -n "$l" ]] && tmp_exists "$l" && bad+=("$l")
+  done < "$DONE"
+  ((${#bad[@]} == 0)) && return 0
+  echo "${Y} ${#bad[@]} unfinished video(s) were marked as done - adding them back to the list.${N}"
+  lookup_keys "${bad[@]}"
+  tmp="$(mktemp)"
+  tr -d '\r' < "$DONE" | grep -vxF -f <(printf '%s\n' "${bad[@]}") > "$tmp"; cat "$tmp" > "$DONE"
+  for l in "${bad[@]}"; do [[ -n "${KEY[$l]}" ]] && keys+=("${KEY[$l]}"); done
+  if ((${#keys[@]} > 0)) && [[ -f "$NAMES" ]]; then
+    tr -d '\r' < "$NAMES" | grep -vxF -f <(printf '%s\n' "${keys[@]}") > "$tmp"; cat "$tmp" > "$NAMES"
+  fi
+  rm -f "$tmp"
+  ensure_nl "$LINKS"
+  printf '%s\n' "${bad[@]}" | grep -vxF -f <(tr -d '\r' < "$LINKS") >> "$LINKS"
+  return 0
+}
+
 download_all() {
   echo "Saving videos to: $OUT"
   BATCH="$(get_batch)"
-  echo "Downloading $BATCH at a time"
+  echo "Downloading $BATCH at a time  (press CTRL + C to stop)"
   have termux-wake-lock && termux-wake-lock
+  STOP=0
+  trap 'STOP=1; echo; echo "${Y}Stopping...${N}"' INT
+  repair_done
   load_done_keys
   local tries=0 skipped=0
-  while true; do
+  while ((STOP == 0)); do
     tr -d '\r' < "$LINKS" | sed '/^[[:space:]]*$/d' \
       | grep -vxF -f <(awk 1 "$DONE" "$FAILED" | tr -d '\r' | sed '/^[[:space:]]*$/d') > "$TODO"
     local left; left=$(grep -c . "$TODO")
@@ -334,13 +367,14 @@ download_all() {
     fi
     local todo=(); mapfile -t todo < "$TODO"
     lookup_keys "${todo[@]}"
+    ((STOP)) && break
 
     # Pick the next batch, skipping files already downloaded under another link
     local now=() dup=() l k
     declare -A PLAN=()
     for l in "${todo[@]}"; do
       k="${KEY[$l]}"
-      if [[ -n "$k" && ( -n "${DK[$k]+x}" || -n "${PLAN[$k]+x}" ) ]]; then
+      if [[ -n "$k" && ( -n "${DK[$k]+x}" || -n "${PLAN[$k]+x}" ) ]] && ! tmp_exists "$l"; then
         echo "${Y} Skipped (already downloaded): ${NAME[$l]:-$l}${N}"
         dup+=("$l"); continue
       fi
@@ -357,24 +391,38 @@ download_all() {
     echo; echo "${C}[$left left] Downloading:${N}"
     for l in "${now[@]}"; do echo "  $l  ${NAME[$l]:+(${NAME[$l]})}"; done
     local args=(); for l in "${now[@]}"; do args+=(-u "$l"); done
-    if "$TDL" dl -d "$OUT" -l "$BATCH" --skip-same --continue "${args[@]}"; then
-      ensure_nl "$DONE"; printf '%s\n' "${now[@]}" >> "$DONE"; tries=0
-      for l in "${now[@]}"; do
+    "$TDL" dl -d "$OUT" -l "$BATCH" --skip-same --continue "${args[@]}"
+    local rc=$?
+    ((STOP)) && break
+
+    # Only count a video as done if tdl succeeded and no unfinished .tmp is left
+    local ok=() bad=()
+    for l in "${now[@]}"; do
+      if ((rc == 0)) && ! tmp_exists "$l"; then ok+=("$l"); else bad+=("$l"); fi
+    done
+    if ((${#ok[@]} > 0)); then
+      ensure_nl "$DONE"; printf '%s\n' "${ok[@]}" >> "$DONE"
+      for l in "${ok[@]}"; do
         k="${KEY[$l]}"
         if [[ -n "$k" ]]; then ensure_nl "$NAMES"; echo "$k" >> "$NAMES"; DK[$k]=1; fi
       done
-    else
-      tries=$((tries + 1))
-      if ((tries >= MAXTRY)); then
-        echo "${R}Failed $MAXTRY times, moving these to failed.txt${N}"
-        ensure_nl "$FAILED"; printf '%s\n' "${now[@]}" >> "$FAILED"; tries=0
-      else
-        echo "${Y}Download failed (try $tries of $MAXTRY). Retrying in 10 seconds...${N}"
-        sleep 10; continue
-      fi
+      remove_from_links "${ok[@]}"
     fi
-    remove_from_links "${now[@]}"
+    if ((${#bad[@]} == 0)); then tries=0; continue; fi
+
+    tries=$((tries + 1))
+    if ((tries >= MAXTRY)); then
+      echo "${R}Failed $MAXTRY times, moving these to failed.txt${N}"
+      ensure_nl "$FAILED"; printf '%s\n' "${bad[@]}" >> "$FAILED"
+      remove_from_links "${bad[@]}"; tries=0
+    else
+      echo "${Y}Download failed (try $tries of $MAXTRY). Retrying in 10 seconds...${N}"
+      sleep 10
+    fi
   done
+  trap - INT
+  rm -f "$TODO"
+  ((STOP)) && echo "${Y}Stopped. Unfinished videos will carry on next time you run it.${N}"
   have termux-wake-unlock && termux-wake-unlock
 }
 
