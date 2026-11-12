@@ -5,7 +5,8 @@ A simple downloader that saves videos from Telegram channels, for **Windows** an
 
 - Add a **whole channel**, or paste **one or many video links**
 - Downloads 1 to 4 videos at a time (your choice, default 3)
-- Never downloads the same post twice
+- Never downloads the same post twice, and skips the same video posted under a
+  different link (matched by file name + size)
 - Safe to close at any time; run it again to carry on
 - Links that keep failing are set aside so the rest keep going
 - Installs tdl and signs you in automatically on first run
@@ -153,6 +154,14 @@ You can also paste links into `links.txt` yourself, one per line.
 **4 - Downloads at a time.** Choose how many videos download together, from 1 to 4
 (default 3). More is faster, but too many at once can make Telegram slow you down.
 
+## Duplicate videos
+
+Before downloading, it looks up each post's file name and size. If a video with the
+same name and size was already downloaded (from any link), the post is skipped and
+shown as **Skipped (already downloaded)**. Videos already in your download folder count
+too. Names are compared ignoring capitals, spaces and punctuation, so `My Video.mp4` and
+`my_video.mp4` match - but only if the size is exactly the same.
+
 ## Files it creates
 
 | File | What it's for |
@@ -162,6 +171,7 @@ You can also paste links into `links.txt` yourself, one per line.
 | `failed.txt` | Posts that failed 3 times. Move them back to `links.txt` to retry |
 | `download_folder.txt` | Your chosen save folder. Change it with option 3 |
 | `batch_size.txt` | How many download at a time. Change it with option 4 |
+| `done_names.txt` | Name + size of every downloaded video, used to skip duplicates |
 
 On Windows these are kept next to the scripts; on Android (Termux) they are kept in
 your download folder. These files are personal and are excluded from git.

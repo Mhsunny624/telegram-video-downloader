@@ -230,6 +230,7 @@ waiting() {
 # The link lists live in the download folder, next to the videos
 set_list_paths() {
   LINKS="$OUT/links.txt"; DONE="$OUT/done.txt"; FAILED="$OUT/failed.txt"; TODO="$OUT/todo.tmp"
+  NAMES="$OUT/done_names.txt"
   touch "$LINKS" "$DONE" "$FAILED"
 }
 
@@ -237,7 +238,7 @@ set_list_paths() {
 merge_lists_from() {
   local src="$1" f moved=0
   [[ -z "$src" || "$src" == "$OUT" ]] && return
-  for f in links.txt done.txt failed.txt; do
+  for f in links.txt done.txt failed.txt done_names.txt; do
     if [[ -s "$src/$f" ]]; then
       awk 1 "$OUT/$f" "$src/$f" | tr -d '\r' | sed '/^[[:space:]]*$/d' | awk '!s[$0]++' > "$OUT/$f.tmp" \
         && mv "$OUT/$f.tmp" "$OUT/$f" && rm -f "$src/$f" && moved=1
@@ -253,26 +254,115 @@ change_folder() {
   if [[ "$OUT" != "$old" ]]; then set_list_paths; merge_lists_from "$old"; fi
 }
 
+# ---------- duplicate check (same file name + size) ----------
+declare -A KEY=() NAME=() DK=()
+
+# Turns a file name + size into a match key: size, then the name lower-cased with
+# spaces and punctuation removed (so "My Video.mp4" and "my_video.mp4" match)
+make_key() {
+  local n; n="$(printf '%s' "$2" | tr 'A-Z' 'a-z' | tr -d '\011\040-\057\072-\100\133-\140\173-\176')"
+  [[ -n "$1" && -n "$n" ]] && printf '%s|%s' "$1" "$n"
+}
+
+# Loads every key already downloaded: from done_names.txt and from videos in the folder
+load_done_keys() {
+  DK=()
+  local k size name
+  [[ -f "$NAMES" ]] && while IFS= read -r k; do k="${k%$'\r'}"; [[ -n "$k" ]] && DK["$k"]=1; done < "$NAMES"
+  while IFS=$'\t' read -r size name; do
+    name="$(printf '%s' "$name" | sed -E 's/^-?[0-9]+_[0-9]+_//')"
+    k="$(make_key "$size" "$name")"; [[ -n "$k" ]] && DK["$k"]=1
+  done < <(find "$OUT" -maxdepth 1 -type f ! -name '*.tmp' ! -name '*.txt' ! -name '*.json' ! -name '*.sh' -printf '%s\t%f\n' 2>/dev/null)
+}
+
+# Looks up the file name and size of each link (one quick tdl export per channel)
+lookup_keys() {
+  local l chat id ids pfx tmp mid size name
+  declare -A MIN=() MAX=() PFX=()
+  for l in "$@"; do
+    [[ -n "${KEY[$l]+x}" ]] && continue
+    if [[ $l =~ ^https://t\.me/c/([0-9]+)/([0-9]+)$ ]]; then
+      chat="${BASH_REMATCH[1]}"; id="${BASH_REMATCH[2]}"; PFX[$chat]="https://t.me/c/$chat"
+    elif [[ $l =~ ^https://t\.me/([A-Za-z0-9_]{4,})/([0-9]+)$ ]]; then
+      chat="${BASH_REMATCH[1]}"; id="${BASH_REMATCH[2]}"; PFX[$chat]="https://t.me/$chat"
+    else
+      KEY[$l]=""; continue
+    fi
+    [[ -z "${MIN[$chat]}" ]] || ((id < MIN[$chat])) && MIN[$chat]=$id
+    [[ -z "${MAX[$chat]}" ]] || ((id > MAX[$chat])) && MAX[$chat]=$id
+  done
+  ((${#MIN[@]} == 0)) && return 0
+  echo "${C}Checking file names and sizes...${N}"
+  tmp="$DIR/lookup_export.json"
+  for chat in "${!MIN[@]}"; do
+    rm -f "$tmp"
+    "$TDL" chat export -c "$chat" -T id -i "${MIN[$chat]},${MAX[$chat]}" --raw -o "$tmp" >/dev/null 2>&1
+    [[ -s "$tmp" ]] || continue
+    while IFS=$'\t' read -r mid size name; do
+      l="${PFX[$chat]}/$mid"
+      KEY[$l]="$(make_key "$size" "$name")"; NAME[$l]="$name"
+    done < <(jq -r '.messages[] | "\(.id)\t\(.raw.Media.Document.Size // "")\t\(.file // "")"' "$tmp" 2>/dev/null)
+  done
+  rm -f "$tmp"
+  for l in "$@"; do [[ -n "${KEY[$l]+x}" ]] || KEY[$l]=""; done
+}
+
+# Removes the given links from links.txt (keeps anything added while downloading)
+remove_from_links() {
+  local tmp; tmp="$(mktemp)"
+  tr -d '\r' < "$LINKS" | grep -vxF -f <(printf '%s\n' "$@") > "$tmp"
+  cat "$tmp" > "$LINKS"; rm -f "$tmp"
+}
+
 download_all() {
   echo "Saving videos to: $OUT"
   BATCH="$(get_batch)"
   echo "Downloading $BATCH at a time"
   have termux-wake-lock && termux-wake-lock
-  local tries=0
+  load_done_keys
+  local tries=0 skipped=0
   while true; do
     tr -d '\r' < "$LINKS" | sed '/^[[:space:]]*$/d' \
       | grep -vxF -f <(awk 1 "$DONE" "$FAILED" | tr -d '\r' | sed '/^[[:space:]]*$/d') > "$TODO"
     local left; left=$(grep -c . "$TODO")
     if ((left == 0)); then
-      : > "$LINKS"; rm -f "$TODO"
-      echo; echo "${G}All done! Downloaded: $(grep -c . "$DONE")  Failed: $(grep -c . "$FAILED")${N}"
+      local finished; finished="$(awk 1 "$DONE" "$FAILED" | tr -d '\r' | sed '/^[[:space:]]*$/d')"
+      [[ -n "$finished" ]] && remove_from_links $finished
+      rm -f "$TODO"
+      echo; echo "${G}All done! Finished: $(grep -c . "$DONE")  Failed: $(grep -c . "$FAILED")  (skipped $skipped duplicates this run)${N}"
       break
     fi
-    local now=(); mapfile -t now < <(head -n "$BATCH" "$TODO")
-    echo; echo "${C}[$left left] Downloading:${N}"; printf '  %s\n' "${now[@]}"
+    local todo=(); mapfile -t todo < "$TODO"
+    lookup_keys "${todo[@]}"
+
+    # Pick the next batch, skipping files already downloaded under another link
+    local now=() dup=() l k
+    declare -A PLAN=()
+    for l in "${todo[@]}"; do
+      k="${KEY[$l]}"
+      if [[ -n "$k" && ( -n "${DK[$k]+x}" || -n "${PLAN[$k]+x}" ) ]]; then
+        echo "${Y} Skipped (already downloaded): ${NAME[$l]:-$l}${N}"
+        dup+=("$l"); continue
+      fi
+      now+=("$l"); [[ -n "$k" ]] && PLAN[$k]=1
+      ((${#now[@]} >= BATCH)) && break
+    done
+    unset PLAN
+    if ((${#dup[@]} > 0)); then
+      ensure_nl "$DONE"; printf '%s\n' "${dup[@]}" >> "$DONE"
+      remove_from_links "${dup[@]}"; skipped=$((skipped + ${#dup[@]}))
+    fi
+    ((${#now[@]} == 0)) && continue
+
+    echo; echo "${C}[$left left] Downloading:${N}"
+    for l in "${now[@]}"; do echo "  $l  ${NAME[$l]:+(${NAME[$l]})}"; done
     local args=(); for l in "${now[@]}"; do args+=(-u "$l"); done
     if "$TDL" dl -d "$OUT" -l "$BATCH" --skip-same --continue "${args[@]}"; then
       ensure_nl "$DONE"; printf '%s\n' "${now[@]}" >> "$DONE"; tries=0
+      for l in "${now[@]}"; do
+        k="${KEY[$l]}"
+        if [[ -n "$k" ]]; then ensure_nl "$NAMES"; echo "$k" >> "$NAMES"; DK[$k]=1; fi
+      done
     else
       tries=$((tries + 1))
       if ((tries >= MAXTRY)); then
@@ -283,7 +373,7 @@ download_all() {
         sleep 10; continue
       fi
     fi
-    tail -n +$((${#now[@]} + 1)) "$TODO" > "$LINKS"
+    remove_from_links "${now[@]}"
   done
   have termux-wake-unlock && termux-wake-unlock
 }
