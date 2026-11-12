@@ -84,8 +84,9 @@ Your links, settings and download history are kept.
   doesn't pause it. Leave Termux open (it can be in the background) and avoid swiping it
   away from recent apps.
 - **Files location:** videos go to `Download/Telegram` on your phone by default
-  (change with option 3). Your links and history (`links.txt`, `done.txt`, ...) live in
-  `~/telegram-video-downloader`.
+  (change with option 3). Your link lists (`links.txt`, `done.txt`, `failed.txt`) are
+  kept in the same folder, so you can see and edit them with your file manager. If you
+  change the folder, the lists move with it.
 - **"Can't use that folder" / permission errors:** run `termux-setup-storage` again and
   allow access.
 - **SD card:** Android only lets Termux write inside its own folder on the card, e.g.
@@ -162,7 +163,8 @@ You can also paste links into `links.txt` yourself, one per line.
 | `download_folder.txt` | Your chosen save folder. Change it with option 3 |
 | `batch_size.txt` | How many download at a time. Change it with option 4 |
 
-These files are personal and are excluded from git.
+On Windows these are kept next to the scripts; on Android (Termux) they are kept in
+your download folder. These files are personal and are excluded from git.
 
 ## Scripts
 

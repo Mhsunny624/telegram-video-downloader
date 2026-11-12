@@ -8,7 +8,6 @@ cd "$DIR" || exit 1
 LINKS="$DIR/links.txt"; DONE="$DIR/done.txt"; FAILED="$DIR/failed.txt"
 CFG="$DIR/download_folder.txt"; TODO="$DIR/todo.tmp"
 BATCH=3; MAXTRY=3
-touch "$LINKS" "$DONE" "$FAILED"
 
 C=$'\e[36m'; G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; N=$'\e[0m'
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -228,8 +227,33 @@ waiting() {
 }
 
 # ---------- download ----------
+# The link lists live in the download folder, next to the videos
+set_list_paths() {
+  LINKS="$OUT/links.txt"; DONE="$OUT/done.txt"; FAILED="$OUT/failed.txt"; TODO="$OUT/todo.tmp"
+  touch "$LINKS" "$DONE" "$FAILED"
+}
+
+# Merges link lists from another folder into the current one, then removes the old copies
+merge_lists_from() {
+  local src="$1" f moved=0
+  [[ -z "$src" || "$src" == "$OUT" ]] && return
+  for f in links.txt done.txt failed.txt; do
+    if [[ -s "$src/$f" ]]; then
+      awk 1 "$OUT/$f" "$src/$f" | tr -d '\r' | sed '/^[[:space:]]*$/d' | awk '!s[$0]++' > "$OUT/$f.tmp" \
+        && mv "$OUT/$f.tmp" "$OUT/$f" && rm -f "$src/$f" && moved=1
+    fi
+  done
+  ((moved)) && echo "${G} Moved your link lists to: $OUT${N}"
+  return 0
+}
+
+change_folder() {
+  local old="$OUT"
+  choose_folder change
+  if [[ "$OUT" != "$old" ]]; then set_list_paths; merge_lists_from "$old"; fi
+}
+
 download_all() {
-  choose_folder
   echo "Saving videos to: $OUT"
   BATCH="$(get_batch)"
   echo "Downloading $BATCH at a time"
@@ -267,6 +291,9 @@ download_all() {
 # ---------- main ----------
 setup_deps
 setup_tdl
+choose_folder
+set_list_paths
+merge_lists_from "$DIR"
 
 echo "============================================================"
 echo "                 TELEGRAM VIDEO DOWNLOADER"
@@ -274,7 +301,8 @@ echo "============================================================"
 echo " Downloads up to 4 at a time. Finished links move to done.txt and"
 echo " are never downloaded again. Links that fail 3 times go to"
 echo " failed.txt. Safe to close any time - run again to continue."
-echo " Use option 3 to choose where videos are saved."
+echo " Videos and links.txt / done.txt / failed.txt are kept in the"
+echo " download folder (option 3 to change it)."
 
 while true; do
   echo
@@ -288,7 +316,7 @@ while true; do
   case "${choice,,}" in
     1)  add_channel ;;
     2)  add_videos ;;
-    3)  choose_folder change ;;
+    3)  change_folder ;;
     4)  set_batch ;;
     "") download_all; break ;;
     q)  exit 0 ;;
